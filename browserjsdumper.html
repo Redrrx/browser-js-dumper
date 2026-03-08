@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Browser Environment Comparator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f0f0f; color: #e5e5e5; font-family: monospace; font-size: 12px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+#toolbar {
+  background: #161616; border-bottom: 1px solid #2a2a2a;
+  padding: 7px 10px; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; flex-shrink: 0;
+}
+.btn { padding: 3px 11px; background: #222; color: #ccc; border: 1px solid #444; cursor: pointer; border-radius: 3px; font-family: monospace; font-size: 12px; white-space: nowrap; }
+.btn:hover { background: #2e2e2e; }
+.btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+.btn.active { background: #1a2e1a; border-color: #4a4; color: #8f8; }
+.sep { width: 1px; background: #333; height: 18px; flex-shrink: 0; }
+#search { padding: 3px 8px; background: #111; border: 1px solid #444; color: #eee; border-radius: 3px; font-family: monospace; font-size: 12px; width: 170px; }
+.filters { display: flex; gap: 5px; }
+.filters label { cursor: pointer; color: #888; font-size: 11px; user-select: none; }
+#stats { color: #777; font-size: 11px; }
+.dfilter-group { display: flex; gap: 3px; }
+.dfbtn { padding: 2px 9px; background: #1a1a1a; border: 1px solid #333; color: #666; cursor: pointer; border-radius: 3px; font-size: 11px; white-space: nowrap; }
+.dfbtn:hover { border-color: #555; color: #aaa; }
+.dfbtn.active { color: #fff; }
+.dfbtn[data-f="all"].active     { background: #222; border-color: #666; color: #ccc; }
+.dfbtn[data-f="diff"].active    { background: #2a1a00; border-color: #c87; color: #c87; }
+.dfbtn[data-f="same"].active    { background: #0a1a0a; border-color: #484; color: #8c8; }
+.dfbtn[data-f="missing"].active { background: #1a0a1a; border-color: #85a; color: #b8d; }
+#import-drop { border: 1px dashed #444; border-radius: 3px; padding: 3px 10px; color: #666; font-size: 11px; cursor: pointer; white-space: nowrap; }
+#import-drop:hover { border-color: #888; color: #bbb; }
+#import-drop.has-data { border-color: #4a4; color: #8c8; }
+#file-input { display: none; }
+
+/* BODY */
+#body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* RESIZE HANDLE — shared style */
+.resizer {
+  flex-shrink: 0; background: #1e1e1e; position: relative; z-index: 5;
+  transition: background 0.1s;
+}
+.resizer:hover, .resizer.dragging { background: #4a8; }
+.resizer.vertical   { width: 4px; cursor: col-resize; }
+.resizer.horizontal { height: 4px; cursor: row-resize; }
+.resizer::after {
+  content: ""; position: absolute; inset: 0;
+  /* extend hit area without affecting layout */
+  margin: -3px;
+}
+
+/* SIDEBAR */
+#sidebar { width: 190px; min-width: 80px; max-width: 400px; flex-shrink: 0; background: #111; display: flex; flex-direction: column; overflow: hidden; }
+#ns-search-wrap { padding: 5px 6px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0; }
+#ns-search { width: 100%; padding: 3px 7px; background: #0d0d0d; border: 1px solid #333; color: #ccc; border-radius: 3px; font-family: monospace; font-size: 11px; }
+#ns-search::placeholder { color: #444; }
+#sidebar-list { flex: 1; overflow-y: auto; }
+.cat-item { padding: 3px 8px; cursor: pointer; color: #666; white-space: nowrap; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.cat-item:hover { background: #1a1a1a; color: #bbb; }
+.cat-item.active { background: #1e2a1e; color: #8f8; }
+.cat-name { overflow: hidden; text-overflow: ellipsis; flex: 1; font-size: 11px; }
+.cat-badge { font-size: 9px; padding: 0 4px; border-radius: 8px; flex-shrink: 0; }
+.cb-diff  { background: #3a1500; color: #c87; }
+.cb-count { background: #181818; color: #555; }
+.cat-all { border-bottom: 1px solid #1e1e1e; }
+.cat-all .cat-name { color: #888; font-size: 11px; }
+
+/* MAIN */
+#main { flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative; }
+#single-pane { flex: 1; overflow-y: auto; padding: 4px 8px; }
+#compare-pane { display: none; flex: 1; min-height: 0; overflow: hidden; }
+
+/* COMPARE — flex instead of grid so resizer works */
+.cmp-wrap { display: flex; height: 100%; width: 100%; overflow: hidden; }
+.cmp-col { display: flex; flex-direction: column; min-width: 80px; min-height: 0; overflow: hidden; }
+#cmp-col-a { flex: 0 0 50%; }
+#cmp-col-b { flex: 1; }
+.col-head { flex-shrink: 0; padding: 5px 10px; background: #141414; border-bottom: 1px solid #222; display: flex; gap: 8px; align-items: center; }
+.col-head span { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+.badge { font-size: 10px; padding: 1px 7px; border-radius: 8px; }
+.badge-a { background: #0a1e30; color: #5af; border: 1px solid #1a4060; }
+.badge-b { background: #1a0a30; color: #c8f; border: 1px solid #3a1a60; }
+.col-body { flex: 1; overflow-y: auto; padding: 4px 8px; }
+
+/* ROWS */
+.row { height: 18px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-string   { color: #98c379; }
+.t-integer  { color: #d19a66; }
+.t-float    { color: #e8b070; }
+.t-boolean  { color: #56b6c2; }
+.t-null     { color: #888; }
+.t-object   { color: #4a7aa0; }
+.t-function { color: #5a3a7a; }
+.t-throws   { color: #5a1818; }
+.t-undefined{ color: #3a3a3a; }
+.t-symbol   { color: #e5c07b; }
+.t-bigint   { color: #d19a66; }
+.d-same   { color: #303030; }
+.d-only   { color: #c87941; }
+.d-absent { color: #1e1e1e; font-style: italic; }
+.d-val    { color: #c9a84c; }
+.d-type   { color: #c05060; }
+.tag { font-size: 9px; padding: 0 4px; border-radius: 2px; margin-left: 5px; vertical-align: middle; }
+.tg-only { background: #3a1500; color: #c87; }
+.tg-val  { background: #2e2200; color: #ba8; }
+.tg-type { background: #2e0808; color: #d66; }
+
+/* TOOLTIP */
+#tooltip {
+  display: none; position: fixed; z-index: 9999; pointer-events: none;
+  background: #0c0c18; border: 1px solid #2a2a3a;
+  padding: 6px 10px; font: 11px/1 monospace;
+  max-width: 440px; box-shadow: 0 3px 10px rgba(0,0,0,.6);
+}
+.tt-row   { display: flex; gap: 10px; padding: 2px 0; }
+.tt-label { color: #3a3a4a; min-width: 38px; flex-shrink: 0; }
+.tt-delta { color: #6af; }
+.tt-other { color: #8c8; word-break: break-all; }
+.tt-absent{ color: #444; font-style: italic; }
+
+/* LOADING OVERLAY */
+#panel-loading {
+  position: absolute; inset: 0; z-index: 20;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; background: rgba(12,12,12,0.82); pointer-events: none;
+}
+#panel-loading.visible { display: flex; }
+#pl-label { color: #3a9; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
+#pl-bar   { color: #2a7; font-size: 13px; font-family: monospace; letter-spacing: 0; }
+#pl-sub   { color: #445; font-size: 11px; }
+
+/* STATUSBAR */
+#statusbar {
+  flex-shrink: 0; background: #090909; border-top: 1px solid #1a1a1a;
+  padding: 3px 12px 4px; display: flex; gap: 18px; align-items: center;
+  font-size: 11px; font-family: monospace; color: #3a3a3a; white-space: nowrap;
+}
+.sb { color: #444; }
+.sb b { font-weight: normal; }
+.sb.sb-keys b  { color: #5a7a5a; }
+.sb.sb-diff b  { color: #a06030; }
+.sb.sb-same b  { color: #2a4a2a; }
+.sb.sb-miss b  { color: #5a3a6a; }
+.sb.sb-scan    { color: #3a8a5a; flex: 1; }
+#sb-bar        { color: #2a6a4a; letter-spacing: 0; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button class="btn" id="scan-btn">▶ Scan</button>
+  <button class="btn" id="export-btn" disabled>↓ Export</button>
+  <div id="import-drop">⊕ Import</div>
+  <input type="file" id="file-input" accept=".json">
+  <button class="btn" id="compare-btn" disabled>⇌ Compare</button>
+  <div class="sep"></div>
+  <div class="dfilter-group">
+    <button class="dfbtn active" data-f="all">All</button>
+    <button class="dfbtn" data-f="diff">≠ Different</button>
+    <button class="dfbtn" data-f="same">= Same</button>
+    <button class="dfbtn" data-f="missing">∅ Missing</button>
+  </div>
+  <div class="sep"></div>
+  <input id="search" type="text" placeholder="filter paths / values…">
+  <div class="filters">
+    <label><input type="checkbox" class="tf" value="string"    checked> str</label>
+    <label><input type="checkbox" class="tf" value="integer"   checked> int</label>
+    <label><input type="checkbox" class="tf" value="float"     checked> float</label>
+    <label><input type="checkbox" class="tf" value="boolean"   checked> bool</label>
+    <label><input type="checkbox" class="tf" value="null"      checked> null</label>
+    <label><input type="checkbox" class="tf" value="object"    checked> obj</label>
+    <label><input type="checkbox" class="tf" value="function"> fn</label>
+    <label><input type="checkbox" class="tf" value="undefined"> undef</label>
+    <label><input type="checkbox" class="tf" value="throws"    checked> throws</label>
+  </div>
+</div>
+
+<div id="body">
+  <div id="sidebar">
+    <div id="ns-search-wrap">
+      <input id="ns-search" type="text" placeholder="namespace…">
+    </div>
+    <div id="sidebar-list"></div>
+  </div>
+
+  <!-- sidebar ↔ main resizer -->
+  <div class="resizer vertical" id="resizer-sidebar"></div>
+
+  <div id="main">
+    <div id="panel-loading">
+      <div id="pl-label">initializing</div>
+      <div id="pl-bar"></div>
+      <div id="pl-sub"></div>
+    </div>
+    <div id="single-pane"></div>
+    <div id="compare-pane">
+      <div class="cmp-wrap">
+        <div class="cmp-col" id="cmp-col-a">
+          <div class="col-head">
+            <span>Current browser</span>
+            <div class="badge badge-a" id="badge-a">—</div>
+          </div>
+          <div class="col-body" id="col-a"></div>
+        </div>
+
+        <!-- pane A ↔ pane B resizer -->
+        <div class="resizer vertical" id="resizer-panes"></div>
+
+        <div class="cmp-col" id="cmp-col-b">
+          <div class="col-head">
+            <span>Imported environment</span>
+            <div class="badge badge-b" id="badge-b">—</div>
+          </div>
+          <div class="col-body" id="col-b"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="statusbar">
+  <span class="sb sb-keys">keys <b id="sb-keys">—</b></span>
+  <span class="sb sb-diff">diff <b id="sb-diff">—</b></span>
+  <span class="sb sb-same">same <b id="sb-same">—</b></span>
+  <span class="sb sb-miss">miss <b id="sb-miss">—</b></span>
+  <span class="sb sb-scan" id="sb-scan"></span>
+  <span id="sb-bar"></span>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+// ───────────────────────────────────────────────────────────────────────
+// src/utils.js
+// ───────────────────────────────────────────────────────────────────────
+
+const YIELD = () => new Promise(r => setTimeout(r, 0));
+const BATCH = 1500;
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function attr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+function getCat(path) {
+  return path.split(".")[0];
+}
+
+function getTypes() {
+  const s = new Set();
+  document.querySelectorAll(".tf").forEach(c => { if (c.checked) s.add(c.value); });
+  return s;
+}
+
+function pbar(frac, w = 28) {
+  const f = Math.round(Math.max(0, Math.min(1, frac)) * w);
+  return "▐" + "█".repeat(f) + "░".repeat(w - f) + "▌";
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// src/state.js
+// ───────────────────────────────────────────────────────────────────────
+
+let curMap      = null;
+let impMap      = null;
+let cmpMode     = false;
+let activeCat   = "__all__";
+let diffFilter  = "all";
+let renderGen   = 0;
+let singleCache = null;
+let cmpCache    = null;
+
+const scanBtn    = document.getElementById("scan-btn");
+const exportBtn  = document.getElementById("export-btn");
+const importDrop = document.getElementById("import-drop");
+const fileInput  = document.getElementById("file-input");
+const compareBtn = document.getElementById("compare-btn");
+const searchEl   = document.getElementById("search");
+const nsSearch   = document.getElementById("ns-search");
+const singlePane = document.getElementById("single-pane");
+const comparePan = document.getElementById("compare-pane");
+const badgeA     = document.getElementById("badge-a");
+const badgeB     = document.getElementById("badge-b");
+const colA       = document.getElementById("col-a");
+const colB       = document.getElementById("col-b");
+const sidebarList= document.getElementById("sidebar-list");
+
+const plEl    = document.getElementById("panel-loading");
+const plLabel = document.getElementById("pl-label");
+const plBar   = document.getElementById("pl-bar");
+const plSub   = document.getElementById("pl-sub");
+
+const sbKeys  = document.getElementById("sb-keys");
+const sbDiff  = document.getElementById("sb-diff");
+const sbSame  = document.getElementById("sb-same");
+const sbMiss  = document.getElementById("sb-miss");
+const sbScan  = document.getElementById("sb-scan");
+const sbBarEl = document.getElementById("sb-bar");
+
+// ───────────────────────────────────────────────────────────────────────
+// src/walker.js
+// ───────────────────────────────────────────────────────────────────────
+
+const PROTO_STOPS = new Set([
+  Object.prototype, Function.prototype, EventTarget.prototype,
+]);
+const SKIP_KEYS = new Set(["prototype", "__proto__", "constructor", "caller", "arguments"]);
+
+function collectKeys(obj) {
+  const keys = new Set();
+  let cur = obj;
+  while (cur !== null && !PROTO_STOPS.has(cur)) {
+    for (const k of Reflect.ownKeys(cur))
+      if (typeof k === "string" && !SKIP_KEYS.has(k)) keys.add(k);
+    cur = Object.getPrototypeOf(cur);
+  }
+  return keys;
+}
+
+function naturalDisplay(val) {
+  if (val === null)      return "null";
+  if (val === undefined) return "undefined";
+  if (typeof val === "string")  return val;
+  if (typeof val === "number")  return String(val);
+  if (typeof val === "boolean") return String(val);
+  if (typeof val === "bigint")  return String(val) + "n";
+  if (val instanceof Float32Array || val instanceof Float64Array ||
+      val instanceof Int32Array   || val instanceof Uint32Array  ||
+      val instanceof Int16Array   || val instanceof Uint8Array)
+    return Array.from(val).join(", ");
+  if (Array.isArray(val)) return val.join(", ");
+  return String(val);
+}
+
+async function walk(obj, ns, map, seen, depth) {
+  if (depth > 10) return;
+  if (obj === null || typeof obj !== "object") return;
+  if (seen.has(obj)) return;
+  seen.add(obj);
+
+  for (const key of collectKeys(obj)) {
+    const path = ns + "." + key;
+    let val, threw = false;
+    try { val = obj[key]; } catch { threw = true; }
+
+    if (threw) {
+      map.set(path, { type: "throws", display: "[throws]" });
+      continue;
+    }
+
+    const vt = val === null ? "null" : typeof val;
+
+    if (vt === "function") {
+      map.set(path, { type: "function", display: "[fn]" });
+      continue;
+    }
+
+    if (vt === "object") {
+      if (Array.isArray(val) && val.length > 0 &&
+          val.every(v => v === null || (typeof v !== "object" && typeof v !== "function"))) {
+        seen.add(val);
+        const sorted = [...val].sort((a, b) => String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0);
+        map.set(path, { type: "string", display: sorted.join(", ") });
+        continue;
+      }
+      map.set(path, { type: "object", display: "[" + (val?.constructor?.name ?? "Object") + "]" });
+      await walk(val, path, map, seen, depth + 1);
+      continue;
+    }
+
+    const type = vt === "number"
+      ? (Number.isInteger(val) ? "integer" : "float")
+      : vt;
+    map.set(path, { type, display: naturalDisplay(val) });
+    if (map.size % 500 === 0) await YIELD();
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/canvas.js
+// ───────────────────────────────────────────────────────────────────────
+
+const CANVAS_W = 500;
+const CANVAS_H = 200;
+
+const CANVAS_MEASURE_FONTS = [
+  ["16px Arial",        "mmmmmmmmmmlli"],
+  ["16px serif",        "mmmmmmmmmmlli"],
+  ["16px monospace",    "mmmmmmmmmmlli"],
+  ["bold 20px Arial",   "Sphinx of quartz judge my vow"],
+  ["italic 14px serif", "0Oljl| 1IiLl"],
+];
+
+const CANVAS_TEXT_LAYERS = [
+  ["bold 14px Arial",   "Sphinx of quartz"],
+  ["italic 12px serif", "judge my vow 0Oljl|"],
+  ["11px monospace",    "1IiLl0O !@#$"],
+];
+
+const CANVAS_SAMPLE_POINTS = [
+  [250, 100], [10, 10], [490, 10], [10, 190], [490, 190], [125, 100], [375, 100],
+];
+
+const CANVAS_BLEND_MODES = ["multiply", "screen", "overlay", "difference", "xor"];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/date.js
+// ───────────────────────────────────────────────────────────────────────
+
+const DATE_REF = "2024-06-15T12:00:00Z";
+const DATE_REF_FORMATS = [
+  [{},                                               "default"],
+  [{dateStyle: "full",  timeStyle: "long"},           "full_long"],
+  [{year: "numeric", month: "2-digit", day: "2-digit"}, "numeric_date"],
+  [{weekday: "long", hour: "2-digit", minute: "2-digit"}, "weekday_time"],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/fonts.js
+// ───────────────────────────────────────────────────────────────────────
+
+const FONT_FAMILIES = [
+  "Arial", "serif", "sans-serif", "monospace", "cursive", "fantasy",
+  "system-ui", "Arial Black", "Times New Roman", "Courier New", "Georgia",
+  "Verdana", "Impact", "Comic Sans MS", "Trebuchet MS", "Helvetica",
+  "Palatino", "Garamond", "Bookman", "Tahoma", "Lucida Console",
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/math.js
+// ───────────────────────────────────────────────────────────────────────
+
+const MATH_PROBES = [
+  ["tan_neg1e300",   () => Math.tan(-1e300)],
+  ["sin_pi",         () => Math.sin(Math.PI)],
+  ["sinh_1",         () => Math.sinh(1)],
+  ["cosh_1",         () => Math.cosh(1)],
+  ["acos_sqrt2_inv", () => Math.acos(Math.SQRT1_2)],
+  ["log2e",          () => Math.LOG2E],
+  ["pow_neg0",       () => Math.pow(-0, 0)],
+  ["atan2_0_neg0",   () => Math.atan2(0, -0)],
+  ["hypot_1_1",      () => Math.hypot(1, 1)],
+  ["cbrt_neg1",      () => Math.cbrt(-1)],
+  ["expm1_1",        () => Math.expm1(1)],
+  ["log1p_1",        () => Math.log1p(1)],
+  ["round_neg0_5",   () => Math.round(-0.5)],
+  ["fround_1_1",     () => Math.fround(1.1)],
+  ["imul_3_4",       () => Math.imul(3, 4)],
+  ["clz32_1",        () => Math.clz32(1)],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/media-queries.js
+// ───────────────────────────────────────────────────────────────────────
+
+const MEDIA_QUERIES = {
+  "prefers-color-scheme:dark":    "(prefers-color-scheme: dark)",
+  "prefers-color-scheme:light":   "(prefers-color-scheme: light)",
+  "prefers-reduced-motion":       "(prefers-reduced-motion: reduce)",
+  "prefers-reduced-transparency": "(prefers-reduced-transparency: reduce)",
+  "pointer:fine":                 "(pointer: fine)",
+  "pointer:coarse":               "(pointer: coarse)",
+  "hover:hover":                  "(hover: hover)",
+  "hover:none":                   "(hover: none)",
+  "any-pointer:fine":             "(any-pointer: fine)",
+  "any-pointer:coarse":           "(any-pointer: coarse)",
+  "any-hover:hover":              "(any-hover: hover)",
+  "display-mode:browser":         "(display-mode: browser)",
+  "display-mode:standalone":      "(display-mode: standalone)",
+  "color-gamut:srgb":             "(color-gamut: srgb)",
+  "color-gamut:p3":               "(color-gamut: p3)",
+  "color-gamut:rec2020":          "(color-gamut: rec2020)",
+  "forced-colors":                "(forced-colors: active)",
+  "inverted-colors":              "(inverted-colors: inverted)",
+  "prefers-contrast:more":        "(prefers-contrast: more)",
+  "prefers-contrast:less":        "(prefers-contrast: less)",
+  "dynamic-range:high":           "(dynamic-range: high)",
+  "scripting:enabled":            "(scripting: enabled)",
+  "scripting:none":               "(scripting: none)",
+  "update:fast":                  "(update: fast)",
+  "update:slow":                  "(update: slow)",
+};
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/permissions.js
+// ───────────────────────────────────────────────────────────────────────
+
+const PERMISSION_NAMES = [
+  "geolocation",
+  "notifications",
+  "camera",
+  "microphone",
+  "clipboard-read",
+  "clipboard-write",
+  "payment-handler",
+  "persistent-storage",
+  "push",
+  "midi",
+  "background-sync",
+  "accelerometer",
+  "gyroscope",
+  "magnetometer",
+  "ambient-light-sensor",
+  "screen-wake-lock",
+  "nfc",
+  "storage-access",
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/webgl.js
+// ───────────────────────────────────────────────────────────────────────
+
+const WEBGL_CONSTANT_RANGE = { min: 0x0001, max: 0xFFFF };
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/integrity.js
+// ───────────────────────────────────────────────────────────────────────
+
+const INTEGRITY_NATIVE_FNS = [
+  ["Function.prototype.toString",             () => Function.prototype.toString],
+  ["Object.getOwnPropertyDescriptor",         () => Object.getOwnPropertyDescriptor],
+  ["Object.defineProperty",                   () => Object.defineProperty],
+  ["document.createElement",                  () => document.createElement],
+  ["window.fetch",                            () => window.fetch],
+  ["XMLHttpRequest.open",                     () => XMLHttpRequest.prototype.open],
+  ["JSON.stringify",                          () => JSON.stringify],
+  ["JSON.parse",                              () => JSON.parse],
+  ["Array.prototype.push",                    () => Array.prototype.push],
+  ["Proxy",                                   () => Proxy],
+  ["Reflect.get",                             () => Reflect.get],
+  ["history.pushState",                       () => history.pushState],
+  ["performance.now",                         () => performance.now],
+  ["crypto.getRandomValues",                  () => crypto.getRandomValues],
+  ["navigator.getBattery",                    () => navigator.getBattery],
+  ["navigator.permissions.query",             () => navigator.permissions?.query],
+  ["CanvasRenderingContext2D.getImageData",   () => CanvasRenderingContext2D.prototype.getImageData],
+  ["CanvasRenderingContext2D.fillText",       () => CanvasRenderingContext2D.prototype.fillText],
+  ["WebGLRenderingContext.getParameter",      () => WebGLRenderingContext?.prototype?.getParameter],
+  ["WebGLRenderingContext.getExtension",      () => WebGLRenderingContext?.prototype?.getExtension],
+  ["speechSynthesis.getVoices",               () => speechSynthesis.getVoices],
+  ["navigator.mediaDevices.enumerateDevices", () => navigator.mediaDevices?.enumerateDevices],
+];
+
+const INTEGRITY_PROTO_PAIRS = [
+  ["navigator",   () => [navigator,   Navigator.prototype]],
+  ["document",    () => [document,    Document.prototype]],
+  ["location",    () => [location,    Location.prototype]],
+  ["screen",      () => [screen,      Screen.prototype]],
+  ["history",     () => [history,     History.prototype]],
+  ["performance", () => [performance, Performance.prototype]],
+];
+
+const INTEGRITY_DESCRIPTORS = [
+  [Navigator.prototype, "userAgent"],
+  [Navigator.prototype, "hardwareConcurrency"],
+  [Navigator.prototype, "language"],
+  [Navigator.prototype, "platform"],
+  [Navigator.prototype, "cookieEnabled"],
+  [Navigator.prototype, "onLine"],
+  [Screen.prototype,    "width"],
+  [Screen.prototype,    "height"],
+  [Screen.prototype,    "colorDepth"],
+  [Screen.prototype,    "pixelDepth"],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/css.js
+// ───────────────────────────────────────────────────────────────────────
+
+const CSS_SUPPORTS_PROBES = [
+  ["display_grid",           "display",                    "grid"],
+  ["display_flex",           "display",                    "flex"],
+  ["display_contents",       "display",                    "contents"],
+  ["display_flow_root",      "display",                    "flow-root"],
+  ["container_type",         "container-type",             "inline-size"],
+  ["aspect_ratio",           "aspect-ratio",               "1"],
+  ["gap",                    "gap",                        "10px"],
+  ["backdrop_filter",        "backdrop-filter",            "blur(4px)"],
+  ["content_visibility",     "content-visibility",         "auto"],
+  ["subgrid",                "grid-template-columns",      "subgrid"],
+  ["color_oklch",            "color",                      "oklch(0.5 0.2 120)"],
+  ["color_p3",               "color",                      "color(display-p3 1 0 0)"],
+  ["color_lab",              "color",                      "lab(50% 0 0)"],
+  ["color_hdr",              "color",                      "color(rec2020 1 0 0)"],
+  ["animation_timeline",     "animation-timeline",         "scroll()"],
+  ["overscroll_behavior",    "overscroll-behavior",        "contain"],
+  ["text_decoration_skip",   "text-decoration-skip-ink",   "auto"],
+  ["mask",                   "mask",                       "none"],
+  ["clip_path",              "clip-path",                  "circle(50%)"],
+  ["scroll_snap",            "scroll-snap-type",           "x mandatory"],
+  ["conic_gradient",         "background",                 "conic-gradient(red, blue)"],
+  ["math_style",             "math-style",                 "compact"],
+  ["text_wrap_balance",      "text-wrap",                  "balance"],
+  ["scroll_timeline",        "scroll-timeline",            "none"],
+  ["view_timeline",          "view-timeline",              "none"],
+  ["anchor_name",            "anchor-name",                "--a"],
+  ["field_sizing",           "field-sizing",               "content"],
+  ["interpolate_size",       "interpolate-size",           "allow-keywords"],
+  ["selector_has",           "selector(:has(*))"],
+  ["selector_is",            "selector(:is(*))"],
+  ["selector_where",         "selector(:where(*))"],
+  ["selector_not",           "selector(:not(*))"],
+  ["at_layer",               "@layer"],
+  ["at_container",           "@container (min-width: 1px) {}"],
+  ["nesting",                "selector(& .x)"],
+];
+
+const CSS_COMPUTED_PROBES = [
+  "-webkit-font-smoothing",
+  "-moz-osx-font-smoothing",
+  "text-rendering",
+  "image-rendering",
+  "font-kerning",
+  "font-optical-sizing",
+  "font-synthesis",
+  "font-variant-ligatures",
+  "text-size-adjust",
+  "-webkit-text-size-adjust",
+  "zoom",
+  "appearance",
+  "-webkit-appearance",
+  "user-select",
+  "-webkit-user-select",
+  "scrollbar-width",
+  "scrollbar-gutter",
+  "color-scheme",
+  "print-color-adjust",
+  "touch-action",
+  "overscroll-behavior",
+  "-webkit-tap-highlight-color",
+  "text-underline-offset",
+  "text-decoration-thickness",
+  "hyphenate-character",
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/wasm-features.js
+// ───────────────────────────────────────────────────────────────────────
+
+const WASM_FEATURES = [
+  ["simd",            [0,97,115,109,1,0,0,0,1,6,1,96,1,123,1,123,3,2,1,0,10,6,1,4,0,32,0,11]],
+  ["exceptions",      [0,97,115,109,1,0,0,0,1,5,1,96,1,127,0,13,3,1,0,0]],
+  ["tail_calls",      [0,97,115,109,1,0,0,0,1,4,1,96,0,0,3,2,1,0,10,6,1,4,0,18,0,11]],
+  ["memory64",        [0,97,115,109,1,0,0,0,5,3,1,4,0]],
+  ["reference_types", [0,97,115,109,1,0,0,0,4,4,1,111,0,0]],
+  ["multi_value",     [0,97,115,109,1,0,0,0,1,6,1,96,0,2,127,127,3,2,1,0,10,8,1,6,0,65,1,65,2,11]],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/drm.js
+// ───────────────────────────────────────────────────────────────────────
+
+const DRM_KEY_SYSTEMS = [
+  ["clearkey",    "org.w3.clearkey"],
+  ["widevine",    "com.widevine.alpha"],
+  ["playready",   "com.microsoft.playready"],
+  ["playready30", "com.microsoft.playready.recommendation"],
+  ["fairplay",    "com.apple.fps"],
+  ["fairplay10",  "com.apple.fps.1_0"],
+  ["primetime",   "com.adobe.primetime"],
+];
+
+const DRM_BASE_CONFIGS = [{
+  initDataTypes: ["cenc", "keyids", "webm"],
+  videoCapabilities: [
+    { contentType: 'video/mp4; codecs="avc1.42E01E"' },
+    { contentType: 'video/mp4; codecs="avc1.4d401e"' },
+    { contentType: 'video/webm; codecs="vp8"' },
+    { contentType: 'video/webm; codecs="vp9"' },
+    { contentType: 'video/webm; codecs="vp09.00.10.08"' },
+  ],
+  audioCapabilities: [
+    { contentType: 'audio/mp4; codecs="mp4a.40.2"' },
+    { contentType: 'audio/webm; codecs="vorbis"' },
+    { contentType: 'audio/webm; codecs="opus"' },
+  ],
+}];
+
+const DRM_WIDEVINE_ROBUSTNESS = [
+  ["HW_SECURE_ALL",    "HW_SECURE_ALL"],
+  ["HW_SECURE_DECODE", "HW_SECURE_DECODE"],
+  ["HW_SECURE_CRYPTO", "HW_SECURE_CRYPTO"],
+  ["SW_SECURE_DECODE", "SW_SECURE_DECODE"],
+  ["SW_SECURE_CRYPTO", "SW_SECURE_CRYPTO"],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/constants/gpu-fp.js
+// ───────────────────────────────────────────────────────────────────────
+
+const GPU_FP_BIAS  = 8.0;
+const GPU_FP_RANGE = 16.0;
+
+const GPU_FP_TESTS = [
+  // [name, glsl_expr_using_u_a_and_u_b,  a_val,              b_val]
+  ["sin",          "sin(u_a)",                        0.5,              0.0],
+  ["cos",          "cos(u_a)",                        0.5,              0.0],
+  ["tan",          "tan(u_a)",                        0.5,              0.0],
+  ["asin",         "asin(u_a)",                       0.5,              0.0],
+  ["acos",         "acos(u_a)",                       0.5,              0.0],
+  ["atan1",        "atan(u_a)",                       1.0,              0.0],
+  ["atan2",        "atan(u_a, u_b)",                  1.0,              2.0],
+  ["exp",          "exp(u_a)",                        1.0,              0.0],
+  ["log",          "log(u_a)",                        2.718281828,      0.0],
+  ["exp2",         "exp2(u_a)",                       2.5,              0.0],
+  ["log2",         "log2(u_a)",                       5.0,              0.0],
+  ["sqrt",         "sqrt(u_a)",                       2.0,              0.0],
+  ["inversesqrt",  "inversesqrt(u_a)",                2.0,              0.0],
+  ["pow",          "pow(u_a, u_b)",                   2.0,              0.333333343],
+  ["fma",          "u_a * u_b + u_a",                 1.0000001,        2.0000002],
+  ["sum_fp",       "u_a + u_b",                       0.1,              0.2],
+  ["fract",        "fract(u_a)",                      3.14159265358979, 0.0],
+  ["mod",          "mod(u_a, u_b)",                   10.5,             3.0],
+  ["smoothstep",   "smoothstep(0.0, u_b, u_a)",       0.5,              1.0],
+  ["mix",          "mix(u_a, u_b, 0.3)",              1.0,              4.0],
+  ["normalize_x",  "normalize(vec2(u_a, u_b)).x",     3.0,              4.0],
+  ["length_2d",    "length(vec2(u_a, u_b))",          3.0,              4.0],
+  ["dot_2d",       "dot(vec2(u_a,u_a),vec2(u_b,u_b))", 0.5,            0.7],
+  ["reflect_x",    "reflect(vec2(u_a,0.0),normalize(vec2(u_b,u_b))).x", 1.0, 1.0],
+  ["cross_z",      "cross(vec3(u_a,u_b,0.0),vec3(u_b,u_a,0.0)).z",     0.6, 0.8],
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/activators.js
+// ───────────────────────────────────────────────────────────────────────
+
+const ACTIVATORS = [
+
+  { ns: "navigator",      get: () => navigator },
+  { ns: "visualViewport", get: () => visualViewport },
+  { ns: "screen",         get: () => screen },
+  { ns: "performance",    get: () => performance },
+  { ns: "history",        get: () => history },
+  { ns: "location",       get: () => location },
+  { ns: "document",       get: () => document },
+  { ns: "crypto",         get: () => crypto },
+  { ns: "indexedDB",      get: () => indexedDB },
+  { ns: "caches",         get: () => caches },
+
+  {
+    ns: "canvas",
+    get: () => {
+      const c = document.createElement("canvas");
+      c.width = CANVAS_W; c.height = CANVAS_H;
+      const ctx = c.getContext("2d");
+      const W = CANVAS_W, H = CANVAS_H;
+
+      const rg = ctx.createRadialGradient(W/2,H/2,10,W/2,H/2,W/2);
+      rg.addColorStop(0,"#1a1a2e"); rg.addColorStop(0.5,"#16213e"); rg.addColorStop(1,"#0f3460");
+      ctx.fillStyle = rg; ctx.fillRect(0,0,W,H);
+
+      ctx.save(); ctx.translate(W/2, H/2);
+      for (let i = 0; i < 12; i++) {
+        const a = (i/12)*Math.PI*2, r1=60, r2=90;
+        ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.bezierCurveTo(
+          Math.cos(a-0.3)*r1, Math.sin(a-0.3)*r1,
+          Math.cos(a+0.3)*r2, Math.sin(a+0.3)*r2,
+          Math.cos(a)*r2,     Math.sin(a)*r2
+        );
+        ctx.strokeStyle = `hsla(${(i/12)*360},90%,65%,0.8)`;
+        ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      ctx.restore();
+
+      const lg = ctx.createLinearGradient(0,0,W,H);
+      ["rgba(255,100,100,0.3)","rgba(100,255,100,0.3)","rgba(100,100,255,0.3)",
+       "rgba(255,255,100,0.3)","rgba(255,100,255,0.3)"].forEach((col,i) => lg.addColorStop(i/4, col));
+      ctx.fillStyle = lg; ctx.fillRect(0,0,W,H);
+
+      ctx.beginPath(); ctx.moveTo(0, H/2);
+      for (let x = 0; x <= W; x += 2)
+        ctx.lineTo(x, H/2 + Math.sin(x/W*Math.PI*4)*40 + Math.sin(x/W*Math.PI*7)*15 + Math.cos(x/W*Math.PI*11)*8);
+      ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1.5; ctx.stroke();
+
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(W*0.25, H*0.5, 40, 30, Math.PI/6, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = "rgba(255,200,50,0.8)"; ctx.fillRect(0,0,W,H);
+      ctx.restore();
+
+      ctx.save(); ctx.shadowColor = "rgba(0,255,200,0.9)"; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.arc(W*0.75, H*0.5, 25, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(0,200,180,0.7)"; ctx.fill(); ctx.restore();
+
+      CANVAS_TEXT_LAYERS.forEach(([f,t],i) => {
+        ctx.font = f; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(t, 8, 18+i*16);
+      });
+
+      CANVAS_BLEND_MODES.forEach((mode,i) => {
+        ctx.globalCompositeOperation = mode;
+        ctx.fillStyle = `hsla(${i*72},80%,60%,0.6)`;
+        ctx.beginPath(); ctx.arc(350+i*8, 100+i*6, 20, 0, Math.PI*2); ctx.fill();
+      });
+      ctx.globalCompositeOperation = "source-over";
+
+      const result = { measureText: {}, pixels: {}, rowHash: null, pixelHash: null, context: {} };
+
+      for (const [font, text] of CANVAS_MEASURE_FONTS) {
+        ctx.font = font;
+        const m = ctx.measureText(text);
+        const k = font.replace(/\s+/g,"_").replace(/[^a-z0-9_]/gi,"");
+        result.measureText[k] = {
+          width:                    m.width,
+          actualBoundingBoxAscent:  m.actualBoundingBoxAscent,
+          actualBoundingBoxDescent: m.actualBoundingBoxDescent,
+          fontBoundingBoxAscent:    m.fontBoundingBoxAscent  ?? null,
+          fontBoundingBoxDescent:   m.fontBoundingBoxDescent ?? null,
+        };
+      }
+
+      for (const [px, py] of CANVAS_SAMPLE_POINTS) {
+        const d = ctx.getImageData(px, py, 1, 1).data;
+        result.pixels[`x${px}_y${py}`] = `${d[0]},${d[1]},${d[2]},${d[3]}`;
+      }
+
+      const row = ctx.getImageData(0, Math.round(H/2), W, 1).data;
+      let rh = 0; for (let i = 0; i < row.length; i++) rh = ((rh*31) + row[i]) >>> 0;
+      result.rowHash = rh;
+
+      let ph = 0;
+      for (const v of Object.values(result.pixels))
+        for (const n of v.split(",").map(Number)) ph = ((ph*31) + n) >>> 0;
+      result.pixelHash = ph;
+
+      result.context = ctx;
+      return result;
+    }
+  },
+
+  {
+    ns: "audio",
+    get: async () => {
+      const ac   = new OfflineAudioContext(1, 44100, 44100);
+      const osc  = ac.createOscillator();
+      const comp = ac.createDynamicsCompressor();
+      osc.type = "triangle"; osc.frequency.value = 10000;
+      osc.connect(comp); comp.connect(ac.destination); osc.start(0);
+      const buf  = await ac.startRendering();
+      const data = buf.getChannelData(0);
+
+      let sum = 0, min = Infinity, max = -Infinity;
+      for (let i = 0; i < data.length; i++) {
+        const v = data[i]; sum += Math.abs(v);
+        if (v < min) min = v; if (v > max) max = v;
+      }
+      let hash = 0;
+      for (let i = 0; i < 4096; i++) hash = ((hash*31) + Math.round(data[i]*1e9)) >>> 0;
+
+      return {
+        sampleRate:       buf.sampleRate,
+        length:           buf.length,
+        numberOfChannels: buf.numberOfChannels,
+        channelData:      { sum, min, max, mean: sum / data.length, hash4096: hash },
+        compressor: {
+          threshold: comp.threshold.value, knee: comp.knee.value,
+          ratio:     comp.ratio.value,     attack: comp.attack.value, release: comp.release.value,
+        },
+        context: {
+          sampleRate: ac.sampleRate, length: ac.length,
+          numberOfChannels: ac.numberOfChannels, currentTime: ac.currentTime,
+        },
+      };
+    }
+  },
+
+  {
+    ns: "webgl",
+    get: () => {
+      const c  = document.createElement("canvas");
+      const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+      if (!gl) return { available: false };
+
+      const result = { available: true, params: {}, extensions: null };
+
+      const walkGlParams = (ctx) => {
+        const out = {};
+        const seen = new Set();
+        let p = Object.getPrototypeOf(ctx);
+        while (p && p !== Object.prototype) {
+          for (const k of Object.getOwnPropertyNames(p)) {
+            if (seen.has(k)) continue; seen.add(k);
+            try {
+              const v = ctx[k];
+              if (typeof v === "number" && Number.isInteger(v) && v > WEBGL_CONSTANT_RANGE.min && v < WEBGL_CONSTANT_RANGE.max) {
+                try {
+                  const r = ctx.getParameter(v);
+                  if (r == null) continue;
+                  out[k] = r instanceof Float32Array || r instanceof Int32Array ? Array.from(r) : r;
+                } catch {}
+              }
+            } catch {}
+          }
+          p = Object.getPrototypeOf(p);
+        }
+        return out;
+      };
+
+      const enumExtension = (ctx, name) => {
+        try {
+          const ext = ctx.getExtension(name);
+          if (!ext) return null;
+          const out = {};
+          for (const k of Object.getOwnPropertyNames(Object.getPrototypeOf(ext)).concat(Object.getOwnPropertyNames(ext))) {
+            try {
+              const v = ext[k];
+              if (typeof v === "function") continue;
+              out[k] = v instanceof Float32Array || v instanceof Int32Array ? Array.from(v) : v;
+            } catch {}
+          }
+          return out;
+        } catch { return null; }
+      };
+
+      try { result.extensions = gl.getSupportedExtensions(); } catch {}
+      result.params = walkGlParams(gl);
+
+      try {
+        const dbgExt = gl.getExtension("WEBGL_debug_renderer_info");
+        if (dbgExt) {
+          result.unmaskedVendor   = gl.getParameter(dbgExt.UNMASKED_VENDOR_WEBGL);
+          result.unmaskedRenderer = gl.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL);
+        }
+      } catch {}
+
+      if (result.extensions) {
+        result.extensionData = {};
+        for (const name of result.extensions) {
+          const d = enumExtension(gl, name);
+          if (d && Object.keys(d).length) result.extensionData[name] = d;
+        }
+      }
+
+      const c2 = document.createElement("canvas");
+      const gl2 = c2.getContext("webgl2");
+      if (gl2) {
+        result.webgl2 = { available: true, params: {}, extensions: null, extensionData: {} };
+        try { result.webgl2.extensions = gl2.getSupportedExtensions(); } catch {}
+        result.webgl2.params = walkGlParams(gl2);
+        if (result.webgl2.extensions) {
+          for (const name of result.webgl2.extensions) {
+            const d = enumExtension(gl2, name);
+            if (d && Object.keys(d).length) result.webgl2.extensionData[name] = d;
+          }
+        }
+      }
+
+      return result;
+    }
+  },
+
+  {
+    ns: "storage",
+    get: async () => {
+      const est = await navigator.storage.estimate();
+      return {
+        quota:     est.quota,
+        usage:     est.usage,
+        persisted: await navigator.storage.persisted().catch(() => null),
+      };
+    }
+  },
+
+  {
+    ns: "fonts",
+    get: async () => {
+      const result = { method: null, count: 0, families: null, checks: null };
+
+      if (typeof queryLocalFonts === "function") {
+        try {
+          const local = await queryLocalFonts();
+          const families = new Set(local.map(f => f.family));
+          result.method   = "queryLocalFonts";
+          result.count    = families.size;
+          result.families = [...families].sort();
+          result.raw      = local.map(f => ({ family: f.family, style: f.style, fullName: f.fullName, postscriptName: f.postscriptName }));
+        } catch(e) {
+          result.method = "queryLocalFonts_denied";
+        }
+      }
+
+      if (!result.families) {
+        const checks = {};
+        for (const f of FONT_FAMILIES)
+          try { checks[f.replace(/\s/g,"_")] = document.fonts.check("16px " + f); } catch {}
+        result.method  = "checklist";
+        result.count   = Object.values(checks).filter(Boolean).length;
+        result.checks  = checks;
+      }
+
+      result.documentFontsSize = document.fonts.size;
+      return result;
+    }
+  },
+
+  {
+    ns: "layout",
+    get: () => {
+      const el = document.createElement("div");
+      el.style.cssText = "position:fixed;top:10px;left:10px;width:100px;height:50px;font:16px Arial;padding:4px;border:2px solid red";
+      el.textContent = "probe";
+      document.body.appendChild(el);
+      const br = el.getBoundingClientRect(), cr = el.getClientRects()[0] || {};
+
+      const p = document.createElement("p");
+      p.style.cssText = "position:fixed;top:0;left:0;font:16px Arial;visibility:hidden;white-space:nowrap";
+      p.textContent = "Hello World sphinx of quartz";
+      document.body.appendChild(p);
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      const rbr = range.getBoundingClientRect(), rcr = range.getClientRects()[0] || {};
+
+      document.body.removeChild(el);
+      document.body.removeChild(p);
+
+      return {
+        element: {
+          boundingClientRect: { top: br.top, left: br.left, width: br.width, height: br.height, right: br.right, bottom: br.bottom },
+          clientRect0:        { top: cr.top, left: cr.left, width: cr.width, height: cr.height },
+        },
+        range: {
+          boundingClientRect: { top: rbr.top, left: rbr.left, width: rbr.width, height: rbr.height },
+          clientRect0:        { top: rcr.top, left: rcr.left, width: rcr.width, height: rcr.height },
+        },
+      };
+    }
+  },
+
+  {
+    ns: "svg",
+    get: () => {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+      svg.style.cssText = "position:fixed;top:0;left:0;visibility:hidden";
+      svg.setAttribute("width","600"); svg.setAttribute("height","200");
+
+      const defs = [["Arial",16,"Hello SVG World"],["serif",14,"Sphinx of black quartz"],["monospace",12,"0Oljl| 1IiLl"]];
+      const result = {};
+      const txts = defs.map(([fam,sz,content]) => {
+        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+        t.setAttribute("x","10"); t.setAttribute("y","50");
+        t.setAttribute("font-family",fam); t.setAttribute("font-size",String(sz));
+        t.textContent = content;
+        svg.appendChild(t);
+        return { el:t, fam, sz };
+      });
+      document.body.appendChild(svg);
+
+      for (const { el, fam, sz } of txts) {
+        const bb = el.getBBox(), ext = el.getExtentOfChar(0);
+        result[`${fam}_${sz}`] = {
+          bbox:                { x: bb.x, y: bb.y, width: bb.width, height: bb.height },
+          computedTextLength:  el.getComputedTextLength(),
+          subStringLength_0_5: el.getSubStringLength(0, 5),
+          extentOfChar0:       { x: ext.x, y: ext.y, width: ext.width, height: ext.height },
+        };
+      }
+      document.body.removeChild(svg);
+      return result;
+    }
+  },
+
+  {
+    ns: "intl",
+    get: () => {
+      const ref    = new Date(DATE_REF);
+      const result = { resolvedOptions: {}, formats: {}, numberFormats: {}, collator: {}, segmenter: {}, listFormat: {}, displayNames: {} };
+
+      for (const fmt of ["DateTimeFormat","NumberFormat","Collator","RelativeTimeFormat","PluralRules","Segmenter","ListFormat"])
+        try { result.resolvedOptions[fmt] = new Intl[fmt]().resolvedOptions(); } catch {}
+
+      for (const [opts, key] of DATE_REF_FORMATS)
+        try { result.formats[key] = new Intl.DateTimeFormat(undefined, opts).format(ref); } catch {}
+
+      try { result.numberFormats.default  = new Intl.NumberFormat().format(1234567.89); } catch {}
+      try { result.numberFormats.currency = new Intl.NumberFormat(undefined,{style:"currency",currency:"USD"}).format(99.99); } catch {}
+      try { result.numberFormats.percent  = new Intl.NumberFormat(undefined,{style:"percent"}).format(0.4567); } catch {}
+      try { result.collator.compareAB     = new Intl.Collator().compare("a","b"); } catch {}
+      try { result.supportedLocales       = Intl.DateTimeFormat.supportedLocalesOf(["en","zh","ar","ja","fr","de"]).join(", "); } catch {}
+
+      try {
+        const seg = new Intl.Segmenter(undefined, { granularity: "word" });
+        result.segmenter.words = [...seg.segment("Hello world test")].filter(s => s.isWordLike).map(s => s.segment);
+        result.segmenter.grapheme_count = [...new Intl.Segmenter().segment("e\u0301cafe\u0301")].length;
+      } catch {}
+
+      try { result.listFormat.conjunction  = new Intl.ListFormat(undefined,{style:"long",type:"conjunction"}).format(["a","b","c"]); } catch {}
+      try { result.listFormat.disjunction  = new Intl.ListFormat(undefined,{style:"long",type:"disjunction"}).format(["a","b","c"]); } catch {}
+      try { result.listFormat.unit_short   = new Intl.ListFormat(undefined,{style:"short",type:"unit"}).format(["5km","3min"]); } catch {}
+
+      try {
+        const dnLang = new Intl.DisplayNames(undefined, { type: "language" });
+        result.displayNames.en = dnLang.of("en");
+        result.displayNames.zh = dnLang.of("zh");
+        result.displayNames.ar = dnLang.of("ar");
+      } catch {}
+      try {
+        const dnReg = new Intl.DisplayNames(undefined, { type: "region" });
+        result.displayNames.US = dnReg.of("US");
+        result.displayNames.CN = dnReg.of("CN");
+      } catch {}
+      try {
+        const dnCur = new Intl.DisplayNames(undefined, { type: "currency" });
+        result.displayNames.USD = dnCur.of("USD");
+        result.displayNames.EUR = dnCur.of("EUR");
+      } catch {}
+
+      return result;
+    }
+  },
+
+  {
+    ns: "date",
+    get: () => {
+      const ref = new Date(DATE_REF);
+      const now = new Date();
+      return {
+        timezoneOffset:     now.getTimezoneOffset(),
+        timezone:           Intl.DateTimeFormat().resolvedOptions().timeZone,
+        toString_tz:        now.toString().replace(/^[^(]*/,"").replace(/[()]/g,""),
+        toLocaleString:     ref.toLocaleString(),
+        toLocaleDateString: ref.toLocaleDateString(),
+        toLocaleTimeString: ref.toLocaleTimeString(),
+        refYear:            ref.getFullYear(),
+        refMonth:           ref.getMonth(),
+        refDay:             ref.getDate(),
+        refHours:           ref.getHours(),
+      };
+    }
+  },
+
+  {
+    ns: "speech",
+    get: () => {
+      const voices = speechSynthesis.getVoices();
+      const byName = {};
+      for (const v of voices)
+        byName[v.name] = { lang: v.lang, localService: v.localService, default: v.default };
+      return { count: voices.length, voices: byName };
+    }
+  },
+
+  {
+    ns: "media",
+    get: async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const counts  = { audioinput:0, audiooutput:0, videoinput:0 };
+        for (const d of devices) if (d.kind in counts) counts[d.kind]++;
+        return { total: devices.length, ...counts };
+      } catch { return { available: false }; }
+    }
+  },
+
+  {
+    ns: "permissions",
+    get: async () => {
+      const result = {};
+      for (const name of PERMISSION_NAMES) {
+        try { result[name] = (await navigator.permissions.query({ name })).state; }
+        catch { result[name] = "unsupported"; }
+      }
+      return result;
+    }
+  },
+
+  {
+    ns: "battery",
+    get: async () => {
+      try {
+        const b = await navigator.getBattery();
+        return { charging: b.charging, level: b.level, chargingTime: b.chargingTime, dischargingTime: b.dischargingTime };
+      } catch { return { available: false }; }
+    }
+  },
+
+  {
+    ns: "media_queries",
+    get: () => {
+      const result = {};
+      for (const [k, q] of Object.entries(MEDIA_QUERIES))
+        try { result[k] = window.matchMedia(q).matches; } catch { result[k] = null; }
+      return result;
+    }
+  },
+
+  {
+    ns: "error_stack",
+    get: () => {
+      const e = new Error("probe");
+      return {
+        stack:      e.stack || null,
+        stackLines: e.stack ? e.stack.split("\n").length : 0,
+        hasAt:      e.stack ? e.stack.includes(" at ") : null,
+      };
+    }
+  },
+
+  {
+    ns: "math_precision",
+    get: () => {
+      const result = {};
+      for (const [key, fn] of MATH_PROBES)
+        try { result[key] = fn(); } catch { result[key] = null; }
+      return result;
+    }
+  },
+
+  {
+    ns: "plugins",
+    get: () => ({
+      length:    navigator.plugins.length,
+      names:     Array.from(navigator.plugins).map(p => p.name),
+      mimeTypes: Array.from(navigator.mimeTypes).map(m => m.type),
+    })
+  },
+
+  {
+    ns: "gpu_fp",
+    get: () => {
+      if (typeof WebGLRenderingContext === "undefined") return { available: false };
+      const canvas = document.createElement("canvas");
+      canvas.width = 1; canvas.height = 1;
+      const gl = canvas.getContext("webgl");
+      if (!gl) return { available: false };
+
+      const prec = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+      const result = {
+        available:       true,
+        highp_supported: prec && prec.precision > 0,
+        highp_range_min: prec?.rangeMin ?? null,
+        highp_range_max: prec?.rangeMax ?? null,
+        highp_precision: prec?.precision ?? null,
+      };
+
+      const VS = `attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}`;
+      const makeFS = expr =>
+        `precision highp float;uniform float u_a,u_b;void main(){` +
+        `float v=clamp((${expr}+${GPU_FP_BIAS}.0)/${GPU_FP_RANGE}.0,0.,1.);` +
+        `float n=floor(v*16777215.0);` +
+        `gl_FragColor=vec4(floor(n/65536.0)/255.0,floor(mod(n,65536.0)/256.0)/255.0,mod(n,256.0)/255.0,1.0);}`;
+
+      const mkShader = (type, src) => {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src); gl.compileShader(s);
+        return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : (gl.deleteShader(s), null);
+      };
+
+      const vs = mkShader(gl.VERTEX_SHADER, VS);
+      if (!vs) return { available: true, error: "vs_compile_failed" };
+
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+      const run = (expr, a, b) => {
+        const fs = mkShader(gl.FRAGMENT_SHADER, makeFS(expr));
+        if (!fs) return null;
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          gl.deleteProgram(prog); gl.deleteShader(fs); return null;
+        }
+        gl.useProgram(prog);
+        const pl = gl.getAttribLocation(prog, "p");
+        gl.enableVertexAttribArray(pl);
+        gl.vertexAttribPointer(pl, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform1f(gl.getUniformLocation(prog, "u_a"), a);
+        gl.uniform1f(gl.getUniformLocation(prog, "u_b"), b);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const px = new Uint8Array(4);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        gl.deleteProgram(prog); gl.deleteShader(fs);
+        const n = px[0] * 65536 + px[1] * 256 + px[2];
+        return Math.round((n / 16777215 * GPU_FP_RANGE - GPU_FP_BIAS) * 1e7) / 1e7;
+      };
+
+      result.tests = {};
+      for (const [name, expr, a = 0, b = 0] of GPU_FP_TESTS)
+        try { result.tests[name] = run(expr, a, b); } catch { result.tests[name] = null; }
+
+      gl.deleteShader(vs);
+      gl.deleteBuffer(buf);
+      return result;
+    }
+  },
+
+  {
+    ns: "wasm",
+    get: () => {
+      const result = { available: typeof WebAssembly !== "undefined" };
+      if (!result.available) return result;
+      result.validate = WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0]));
+      result.features = {};
+      for (const [name, bytes] of WASM_FEATURES)
+        try { result.features[name] = WebAssembly.validate(new Uint8Array(bytes)); } catch { result.features[name] = false; }
+      return result;
+    }
+  },
+
+  {
+    ns: "webrtc",
+    get: () => {
+      const result = { available: typeof RTCPeerConnection !== "undefined" };
+      if (!result.available) return result;
+      try {
+        const ac = RTCRtpSender.getCapabilities("audio");
+        result.audioSendCodecs = ac?.codecs?.map(c => ({ mimeType: c.mimeType, clockRate: c.clockRate, channels: c.channels, sdpFmtpLine: c.sdpFmtpLine ?? null })) ?? null;
+      } catch { result.audioSendCodecs = null; }
+      try {
+        const vc = RTCRtpSender.getCapabilities("video");
+        result.videoSendCodecs = vc?.codecs?.map(c => ({ mimeType: c.mimeType, clockRate: c.clockRate, sdpFmtpLine: c.sdpFmtpLine ?? null })) ?? null;
+      } catch { result.videoSendCodecs = null; }
+      try {
+        const ar = RTCRtpReceiver.getCapabilities("audio");
+        result.audioRecvCodecs = ar?.codecs?.map(c => ({ mimeType: c.mimeType, clockRate: c.clockRate, channels: c.channels })) ?? null;
+      } catch { result.audioRecvCodecs = null; }
+      try {
+        const vr = RTCRtpReceiver.getCapabilities("video");
+        result.videoRecvCodecs = vr?.codecs?.map(c => ({ mimeType: c.mimeType, clockRate: c.clockRate })) ?? null;
+      } catch { result.videoRecvCodecs = null; }
+      return result;
+    }
+  },
+
+  {
+    ns: "css",
+    get: () => {
+      const result = { supports: {}, computed: {} };
+
+      for (const probe of CSS_SUPPORTS_PROBES) {
+        const [key, ...args] = probe;
+        try { result.supports[key] = CSS.supports(...args); } catch { result.supports[key] = null; }
+      }
+
+      const el = document.createElement("div");
+      el.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;visibility:hidden";
+      document.body.appendChild(el);
+      const cs = getComputedStyle(el);
+      for (const prop of CSS_COMPUTED_PROBES) {
+        try {
+          const v = cs.getPropertyValue(prop);
+          result.computed[prop] = v !== "" ? v : null;
+        } catch { result.computed[prop] = null; }
+      }
+      document.body.removeChild(el);
+
+      return result;
+    }
+  },
+
+  {
+    ns: "keyboard",
+    get: async () => {
+      const result = { available: typeof navigator.keyboard !== "undefined" };
+      if (!result.available) return result;
+      try {
+        const map = await navigator.keyboard.getLayoutMap();
+        result.size = map.size;
+        result.layout = {};
+        for (const [code, key] of map) result.layout[code] = key;
+      } catch(e) { result.error = e?.name ?? "error"; }
+      return result;
+    }
+  },
+
+  {
+    ns: "drm",
+    get: async () => {
+      const result = { available: typeof navigator.requestMediaKeySystemAccess === "function" };
+      if (!result.available) return result;
+
+      result.systems = {};
+      for (const [name, keySystem] of DRM_KEY_SYSTEMS) {
+        try {
+          const access = await navigator.requestMediaKeySystemAccess(keySystem, DRM_BASE_CONFIGS);
+          const cfg = access.getConfiguration();
+          result.systems[name] = {
+            supported:    true,
+            initDataTypes: cfg.initDataTypes ?? null,
+            videoCodecs:   cfg.videoCapabilities?.map(c => c.contentType) ?? null,
+            audioCodecs:   cfg.audioCapabilities?.map(c => c.contentType) ?? null,
+          };
+        } catch { result.systems[name] = { supported: false }; }
+      }
+
+      if (result.systems.widevine?.supported) {
+        result.widevine_robustness = {};
+        for (const [label, robustness] of DRM_WIDEVINE_ROBUSTNESS) {
+          try {
+            await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+              initDataTypes: ["cenc"],
+              videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"', robustness }],
+            }]);
+            result.widevine_robustness[label] = true;
+          } catch { result.widevine_robustness[label] = false; }
+        }
+      }
+
+      return result;
+    }
+  },
+
+  {
+    ns: "chrome",
+    get: () => {
+      if (typeof window.chrome === "undefined") return { available: false };
+      const r = { available: true };
+      try { if (typeof chrome.loadTimes === "function") r.loadTimes = chrome.loadTimes(); } catch {}
+      try { if (typeof chrome.csi       === "function") r.csi       = chrome.csi();       } catch {}
+      try { r.runtime = chrome.runtime ?? null; } catch {}
+      try { r.app     = chrome.app     ?? null; } catch {}
+      return r;
+    }
+  },
+
+  {
+    ns: "apis",
+    get: () => ({
+      bluetooth:          typeof navigator.bluetooth !== "undefined",
+      barcodeDetector:    typeof BarcodeDetector !== "undefined",
+      webShare:           typeof navigator.share === "function",
+      credentials:        typeof navigator.credentials !== "undefined",
+      paymentRequest:     typeof PaymentRequest !== "undefined",
+      usb:                typeof navigator.usb !== "undefined",
+      serial:             typeof navigator.serial !== "undefined",
+      nfc:                typeof NDEFReader !== "undefined",
+      hid:                typeof navigator.hid !== "undefined",
+      fileSystemAccess:   typeof window.showOpenFilePicker === "function",
+      eyeDropper:         typeof EyeDropper !== "undefined",
+      contactPicker:      typeof navigator.contacts !== "undefined",
+      xr:                 typeof navigator.xr !== "undefined",
+      webAuthn:           typeof PublicKeyCredential !== "undefined",
+      speechRecognition:  typeof (window.SpeechRecognition ?? window.webkitSpeechRecognition) !== "undefined",
+      mediaCapabilities:  typeof navigator.mediaCapabilities !== "undefined",
+      deviceOrientation:  typeof DeviceOrientationEvent !== "undefined",
+      deviceMotion:       typeof DeviceMotionEvent !== "undefined",
+      wakeLock:           typeof navigator.wakeLock !== "undefined",
+      scheduler:          typeof window.scheduler !== "undefined",
+      idleDetector:       typeof window.IdleDetector !== "undefined",
+      windowManagement:   typeof window.getScreenDetails === "function",
+      screenOrientation:  typeof screen.orientation !== "undefined",
+      pointerLock:        typeof document.pointerLockElement !== "undefined",
+      pictureInPicture:   typeof document.pictureInPictureEnabled !== "undefined",
+      presentation:       typeof navigator.presentation !== "undefined",
+      computePressure:    typeof PressureObserver !== "undefined",
+      webTransport:       typeof WebTransport !== "undefined",
+      webCodecs:          typeof VideoEncoder !== "undefined",
+      clipboard:          typeof navigator.clipboard !== "undefined",
+      locks:              typeof navigator.locks !== "undefined",
+      backgroundSync:     typeof SyncManager !== "undefined",
+      periodicSync:       typeof PeriodicSyncManager !== "undefined",
+      storageFoundation:  typeof navigator.storage !== "undefined",
+      sharedStorage:      typeof window.sharedStorage !== "undefined",
+      topics:             typeof document.browsingTopics === "function",
+      fledge:             typeof navigator.runAdAuction === "function",
+      trustToken:         typeof document.hasTrustToken === "function",
+      privateStateToken:  typeof document.hasPrivateToken === "function",
+    })
+  },
+];
+
+// ───────────────────────────────────────────────────────────────────────
+// src/integrity.js
+// ───────────────────────────────────────────────────────────────────────
+
+ACTIVATORS.push({
+  ns: "integrity",
+  get: () => {
+    const descToString = Object.getOwnPropertyDescriptor(Function.prototype, "toString")?.value;
+    const nativeStr = fn => {
+      if (typeof fn !== "function") return null;
+      try { return (descToString || Function.prototype.toString).call(fn); } catch { return null; }
+    };
+    const isNative = fn => {
+      const s = nativeStr(fn);
+      return s === null ? null : s.includes("[native code]");
+    };
+    const descInfo = (obj, key) => {
+      try {
+        const d = Object.getOwnPropertyDescriptor(obj, key);
+        if (!d) return null;
+        return { configurable: d.configurable, writable: d.writable, enumerable: d.enumerable, hasGet: !!d.get, hasSet: !!d.set };
+      } catch { return null; }
+    };
+
+    const native = {};
+    for (const [label, getFn] of INTEGRITY_NATIVE_FNS) {
+      try { native[label] = isNative(getFn()); } catch { native[label] = null; }
+    }
+
+    const proto = {};
+    for (const [label, getPair] of INTEGRITY_PROTO_PAIRS) {
+      try {
+        const [obj, expectedProto] = getPair();
+        proto[label] = Object.getPrototypeOf(obj) === expectedProto;
+      } catch { proto[label] = null; }
+    }
+
+    const descriptors = {};
+    for (const [obj, key] of INTEGRITY_DESCRIPTORS) {
+      try { descriptors[obj.constructor?.name + "." + key] = descInfo(obj, key); } catch {}
+    }
+
+    const ownKeyDelta = {};
+    const nativeNavKeys   = Object.getOwnPropertyNames(Navigator.prototype).length;
+    const nativeScreenKeys= Object.getOwnPropertyNames(Screen.prototype).length;
+    const actualNavKeys   = Object.getOwnPropertyNames(navigator).length;
+    ownKeyDelta["Navigator.prototype.keys"]  = nativeNavKeys;
+    ownKeyDelta["Screen.prototype.keys"]     = nativeScreenKeys;
+    ownKeyDelta["navigator.own.keys"]        = actualNavKeys;
+    ownKeyDelta["navigator.own.unexpected"]  = actualNavKeys > 0;
+
+    const toStringTag = {};
+    for (const [label, obj] of [
+      ["window",      window],
+      ["navigator",   navigator],
+      ["document",    document],
+      ["location",    location],
+      ["screen",      screen],
+      ["performance", performance],
+    ]) {
+      try { toStringTag[label] = Object.prototype.toString.call(obj); } catch { toStringTag[label] = null; }
+    }
+
+    const consistency = {};
+    try { consistency["navigator.userAgent.value"]  = navigator.userAgent; } catch {}
+    try { consistency["navigator.userAgent.desc"]   = Object.getOwnPropertyDescriptor(Navigator.prototype, "userAgent")?.get?.call(navigator); } catch {}
+    consistency["userAgent.matches"] = consistency["navigator.userAgent.value"] === consistency["navigator.userAgent.desc"];
+
+    try { consistency["screen.width.value"]  = screen.width; } catch {}
+    try { consistency["screen.width.desc"]   = Object.getOwnPropertyDescriptor(Screen.prototype, "width")?.get?.call(screen); } catch {}
+    consistency["screen.width.matches"] = consistency["screen.width.value"] === consistency["screen.width.desc"];
+
+    return {
+      webdriver:   navigator.webdriver,
+      native,
+      proto,
+      descriptors,
+      ownKeyDelta,
+      toStringTag,
+      consistency,
+    };
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// src/scanner.js
+// ───────────────────────────────────────────────────────────────────────
+
+async function scanAll(onProgress) {
+  const map     = new Map();
+  const seen    = new WeakSet();
+  const winSeen = new WeakSet();
+
+  onProgress?.("window", 0);
+  await walk(window, "window", map, winSeen, 0);
+
+  for (const { ns, get } of ACTIVATORS) {
+    onProgress?.(ns, map.size);
+    await YIELD();
+    try {
+      let obj = get();
+      if (obj instanceof Promise) obj = await obj;
+      if (obj == null) continue;
+
+      if (typeof obj === "object") {
+        map.set(ns, { type: "object", display: "[" + (obj?.constructor?.name ?? "Object") + "]" });
+        await walk(obj, ns, map, seen, 0);
+      } else {
+        map.set(ns, { type: typeof obj, display: naturalDisplay(obj) });
+      }
+    } catch(e) {
+      map.set(ns, { type: "throws", display: "[throws: " + e.message + "]" });
+    }
+  }
+
+  return map;
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// src/cache.js
+// ───────────────────────────────────────────────────────────────────────
+
+function cmpRow(cls, content, myEntry, otherVal, otherType) {
+  let d = '';
+  if (myEntry)          d += ` data-val="${attr(myEntry.display)}" data-type="${myEntry.type}"`;
+  if (otherVal != null) d += ` data-other="${attr(otherVal)}"`;
+  if (otherType)        d += ` data-otype="${otherType}"`;
+  return `<div class="row ${cls}"${d}>${content}</div>`;
+}
+
+const TAG_ONLY   = '<span class="tag tg-only">only here</span>';
+const TAG_VAL    = '<span class="tag tg-val">≠ val</span>';
+const mkTypeTag  = (f, t) => `<span class="tag tg-type">≠ type (${esc(f)}→${esc(t)})</span>`;
+
+async function buildSingleCache() {
+  singleCache = new Map([["__all__", []]]);
+  let n = 0;
+  for (const [path, e] of curMap) {
+    const text  = path + " = " + e.display;
+    const html  = `<div class="row t-${e.type}" data-path="${attr(path)}" data-val="${attr(e.display)}" data-type="${e.type}">${esc(text)}</div>`;
+    const entry = { html, text, type: e.type };
+    const cat   = getCat(path);
+    if (!singleCache.has(cat)) singleCache.set(cat, []);
+    singleCache.get(cat).push(entry);
+    singleCache.get("__all__").push(entry);
+    if (++n % 2000 === 0) await YIELD();
+  }
+}
+
+async function buildCmpCache() {
+  cmpCache = new Map([["__all__", { diff: [], same: [], miss: [], all: [] }]]);
+  const allPaths = new Set([...curMap.keys(), ...impMap.keys()]);
+  let n = 0;
+
+  for (const path of allPaths) {
+    const a = curMap.get(path), b = impMap.get(path);
+    const ta = path + (a ? " = " + a.display : " = —");
+    const tb = path + (b ? " = " + b.display : " = —");
+
+    const state = (a && b)
+      ? (a.type !== b.type ? "type" : a.display !== b.display ? "val" : "same")
+      : (a ? "only-a" : "only-b");
+
+    let aHtml, bHtml;
+    if (state === "same") {
+      aHtml = `<div class="row d-same">${esc(ta)}</div>`;
+      bHtml = `<div class="row d-same">${esc(tb)}</div>`;
+    } else if (state === "only-a") {
+      aHtml = cmpRow("d-only",   esc(ta) + TAG_ONLY,              a,    "—",       null);
+      bHtml = cmpRow("d-absent", esc(path) + " = —",              null, a.display, a.type);
+    } else if (state === "only-b") {
+      aHtml = cmpRow("d-absent", esc(path) + " = —",              null, b.display, b.type);
+      bHtml = cmpRow("d-only",   esc(tb) + TAG_ONLY,              b,    "—",       null);
+    } else if (state === "val") {
+      aHtml = cmpRow("d-val",    esc(ta) + TAG_VAL,               a,    b.display, b.type);
+      bHtml = cmpRow("d-val",    esc(tb) + TAG_VAL,               b,    a.display, a.type);
+    } else {
+      aHtml = cmpRow("d-type",   esc(ta) + mkTypeTag(a.type, b.type), a, b.display, b.type);
+      bHtml = cmpRow("d-type",   esc(tb) + mkTypeTag(b.type, a.type), b, a.display, a.type);
+    }
+
+    const bucket = state === "same" ? "same" : (state === "only-a" || state === "only-b") ? "miss" : "diff";
+    const entry  = { aHtml, bHtml, ta, tb, typeA: a?.type ?? null, typeB: b?.type ?? null };
+    const cat    = getCat(path);
+
+    if (!cmpCache.has(cat)) cmpCache.set(cat, { diff: [], same: [], miss: [], all: [] });
+    cmpCache.get(cat)[bucket].push(entry);
+    cmpCache.get(cat).all.push(entry);
+    cmpCache.get("__all__")[bucket].push(entry);
+    cmpCache.get("__all__").all.push(entry);
+
+    if (++n % 2000 === 0) await YIELD();
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// src/renderer.js
+// ───────────────────────────────────────────────────────────────────────
+
+function showLoading(label, sub) {
+  plLabel.textContent = label;
+  plBar.textContent   = pbar(0);
+  plSub.textContent   = sub || "";
+  plEl.classList.add("visible");
+}
+function updateLoading(frac, sub) {
+  plBar.textContent = pbar(frac);
+  if (sub !== undefined) plSub.textContent = sub;
+}
+function hideLoading() { plEl.classList.remove("visible"); }
+
+function setScan(msg)          { sbScan.textContent = msg; sbBarEl.textContent = ""; }
+function setScanBar(frac, msg) { sbScan.textContent = msg; sbBarEl.textContent = pbar(frac, 20); }
+function clearStatus()         { sbKeys.textContent="—"; sbDiff.textContent="—"; sbSame.textContent="—"; sbMiss.textContent="—"; sbScan.textContent=""; sbBarEl.textContent=""; }
+
+function setViewStatus(shown, total) {
+  sbKeys.textContent = shown.toLocaleString() + " / " + total.toLocaleString();
+  sbDiff.textContent = "—"; sbSame.textContent = "—"; sbMiss.textContent = "—";
+}
+function setCmpStatus(shown, nDiff, nSame, nMiss) {
+  sbKeys.textContent = shown.toLocaleString();
+  sbDiff.textContent = nDiff.toLocaleString();
+  sbSame.textContent = nSame.toLocaleString();
+  sbMiss.textContent = nMiss.toLocaleString();
+}
+
+async function stream(gen, entries, filter, flush, onDone) {
+  const total = entries.length;
+  let pending = [], nShown = 0;
+  for (let i = 0; i < total; i++) {
+    if (renderGen !== gen) { hideLoading(); return false; }
+    const item = filter(entries[i]);
+    if (item == null) continue;
+    pending.push(item);
+    nShown++;
+    if (nShown % BATCH === 0) {
+      flush(pending, i / total, nShown);
+      pending = [];
+      await YIELD();
+    }
+  }
+  if (renderGen !== gen) { hideLoading(); return false; }
+  if (pending.length) flush(pending, 1, nShown);
+  onDone(nShown);
+  return true;
+}
+
+async function renderSingle(gen) {
+  if (!singleCache) { showLoading("indexing", "…"); await buildSingleCache(); }
+  if (renderGen !== gen) { hideLoading(); return; }
+
+  const types   = getTypes();
+  const q       = searchEl.value.toLowerCase();
+  const entries = singleCache.get(activeCat) || [];
+  const total   = entries.length;
+  showLoading("loading", activeCat === "__all__" ? "all" : activeCat);
+  singlePane.innerHTML = "";
+
+  await stream(gen, entries,
+    e => (!types.has(e.type) || (q && !e.text.toLowerCase().includes(q))) ? null : e.html,
+    (items, frac, nShown) => {
+      singlePane.insertAdjacentHTML("beforeend", items.join(""));
+      updateLoading(frac, nShown.toLocaleString() + " rows");
+      setScanBar(frac, nShown.toLocaleString() + " / " + total.toLocaleString());
+    },
+    nShown => {
+      hideLoading();
+      setViewStatus(nShown, curMap.size);
+      sbScan.textContent = ""; sbBarEl.textContent = "";
+    }
+  );
+}
+
+async function renderCompare(gen) {
+  if (!cmpCache) { showLoading("indexing", "building comparison cache…"); await buildCmpCache(); }
+  if (renderGen !== gen) { hideLoading(); return; }
+
+  const types   = getTypes();
+  const q       = searchEl.value.toLowerCase();
+  const catData = cmpCache.get(activeCat) || { diff: [], same: [], miss: [], all: [] };
+  const entries = { diff: catData.diff, same: catData.same, missing: catData.miss }[diffFilter] ?? catData.all;
+  showLoading("comparing", (activeCat === "__all__" ? "all" : activeCat) + " · " + diffFilter);
+  colA.innerHTML = ""; colB.innerHTML = "";
+
+  await stream(gen, entries,
+    e => (!types.has(e.typeA) && !types.has(e.typeB)) ||
+         (q && !e.ta.toLowerCase().includes(q) && !e.tb.toLowerCase().includes(q)) ? null : e,
+    (items, frac, nShown) => {
+      colA.insertAdjacentHTML("beforeend", items.map(e => e.aHtml).join(""));
+      colB.insertAdjacentHTML("beforeend", items.map(e => e.bHtml).join(""));
+      updateLoading(frac, nShown.toLocaleString() + " / " + entries.length.toLocaleString());
+      setScanBar(frac, nShown.toLocaleString() + " / " + entries.length.toLocaleString());
+    },
+    nShown => {
+      hideLoading();
+      setCmpStatus(nShown, catData.diff.length, catData.same.length, catData.miss.length);
+      sbScan.textContent = ""; sbBarEl.textContent = "";
+    }
+  );
+}
+
+async function renderContent() {
+  const gen = ++renderGen;
+  if (cmpMode && curMap && impMap) {
+    singlePane.style.display = "none";
+    comparePan.style.display = "flex";
+    await renderCompare(gen);
+  } else {
+    comparePan.style.display = "none";
+    singlePane.style.display = "";
+    if (curMap) await renderSingle(gen);
+  }
+}
+
+async function render() { buildSidebar(); await renderContent(); }
+
+// ───────────────────────────────────────────────────────────────────────
+// src/sidebar.js
+// ───────────────────────────────────────────────────────────────────────
+
+function valueMatchesCat(cat, q) {
+  for (const m of [curMap, impMap]) {
+    if (!m) continue;
+    for (const [path, e] of m)
+      if (getCat(path) === cat && (path + " " + e.display).toLowerCase().includes(q))
+        return true;
+  }
+  return false;
+}
+
+function buildSidebar() {
+  const types = getTypes();
+  const nsQ   = nsSearch.value.toLowerCase();
+  const src   = curMap || impMap;
+  if (!src) return;
+
+  const allPaths = (cmpMode && impMap)
+    ? new Set([...curMap.keys(), ...impMap.keys()])
+    : new Set(src.keys());
+
+  const cats = new Map();
+  for (const path of allPaths) {
+    const cat   = getCat(path);
+    const entry = curMap?.get(path) || impMap?.get(path);
+    if (!types.has(entry?.type)) continue;
+    if (!cats.has(cat)) cats.set(cat, { total: 0, diffs: 0 });
+    const c = cats.get(cat);
+    c.total++;
+    if (cmpMode && impMap) {
+      const a = curMap?.get(path), b = impMap?.get(path);
+      if (!a || !b || a.type !== b.type || a.display !== b.display) c.diffs++;
+    }
+  }
+
+  const sorted = [...cats.entries()].sort((a, b) => b[1].total - a[1].total);
+  let totalAll = 0, totalDiffs = 0;
+  for (const [, v] of cats) { totalAll += v.total; totalDiffs += v.diffs; }
+
+  sidebarList.innerHTML = "";
+
+  if (!nsQ) {
+    const el = document.createElement("div");
+    el.className = "cat-item cat-all" + (activeCat === "__all__" ? " active" : "");
+    el.dataset.cat = "__all__";
+    const badge = cmpMode && totalDiffs
+      ? `<span class="cat-badge cb-diff">${totalDiffs}</span>`
+      : `<span class="cat-badge cb-count">${totalAll}</span>`;
+    el.innerHTML = `<span class="cat-name">* all</span>${badge}`;
+    sidebarList.appendChild(el);
+  }
+
+  for (const [name, info] of sorted) {
+    const nameMatch  = !nsQ || name.toLowerCase().includes(nsQ);
+    const valueMatch = nsQ && !nameMatch && valueMatchesCat(name, nsQ);
+    if (!nameMatch && !valueMatch) continue;
+
+    const el = document.createElement("div");
+    el.className = "cat-item" + (activeCat === name ? " active" : "");
+    el.dataset.cat = name;
+    if (valueMatch) el.dataset.valueMatch = "1";
+    const badge = cmpMode && info.diffs
+      ? `<span class="cat-badge cb-diff">${info.diffs}</span>`
+      : `<span class="cat-badge cb-count">${info.total}</span>`;
+    el.innerHTML = `<span class="cat-name">${esc(name)}</span>${badge}`;
+    sidebarList.appendChild(el);
+  }
+}
+
+sidebarList.addEventListener("click", e => {
+  const item = e.target.closest(".cat-item"); if (!item) return;
+  activeCat = item.dataset.cat;
+  if (item.dataset.valueMatch) {
+    searchEl.value = nsSearch.value;
+    nsSearch.value = "";
+    buildSidebar();
+  }
+  sidebarList.querySelectorAll(".cat-item").forEach(el =>
+    el.classList.toggle("active", el.dataset.cat === activeCat));
+  renderContent();
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// src/ui.js
+// ───────────────────────────────────────────────────────────────────────
+
+const tooltip = document.getElementById("tooltip");
+
+function ttRow(label, valHtml) {
+  return '<div class="tt-row"><span class="tt-label">' + label + '</span>' + valHtml + '</div>';
+}
+
+function tooltipHTML(myVal, otherVal, myType, otherType) {
+  if (otherVal === undefined) return null;
+  const rows = [];
+  const absent = otherVal === "—" || otherVal === "";
+
+  if (myType && otherType && myType !== otherType)
+    rows.push(ttRow("type", '<span class="tt-delta">' + esc(myType) + ' → ' + esc(otherType) + '</span>'));
+
+  if (absent) {
+    rows.push('<div class="tt-absent">not present in other environment</div>');
+  } else {
+    const numTypes = new Set(["integer", "float"]);
+    if (numTypes.has(myType) && numTypes.has(otherType)) {
+      const a = parseFloat(myVal), b = parseFloat(otherVal);
+      if (!isNaN(a) && !isNaN(b)) {
+        const d = b - a;
+        rows.push(ttRow("Δ",     '<span class="tt-delta">' + (d >= 0 ? "+" : "") + d + '</span>'));
+        rows.push(ttRow("ratio", '<span class="tt-delta">' + (a !== 0 ? (b / a).toFixed(4) + "×" : "∞") + '</span>'));
+      }
+    }
+    rows.push(ttRow("other", '<span class="tt-other">' + esc(otherVal) + '</span>'));
+  }
+  return rows.join("");
+}
+
+function posTooltip(x, y) {
+  tooltip.style.left = (x + 16) + "px";
+  tooltip.style.top  = (y + 14) + "px";
+  const r = tooltip.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  tooltip.style.left = (x - r.width  - 8) + "px";
+  if (r.bottom > window.innerHeight) tooltip.style.top  = (y - r.height - 8) + "px";
+}
+
+document.addEventListener("mousemove", e => {
+  const row = e.target.closest(".row");
+  if (!row) { tooltip.style.display = "none"; return; }
+
+  let html = null;
+
+  if (row.hasAttribute("data-other")) {
+    html = tooltipHTML(row.dataset.val, row.dataset.other, row.dataset.type, row.dataset.otype);
+  } else if (row.hasAttribute("data-path") && impMap && impMap.size > 0) {
+    const path = row.dataset.path;
+    const imp  = impMap.get(path);
+    if (imp) {
+      html = tooltipHTML(row.dataset.val, imp.display, row.dataset.type ?? "", imp.type);
+    } else {
+      html = '<div class="tt-absent">not present in imported environment</div>';
+    }
+  }
+
+  if (html) {
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+    posTooltip(e.clientX, e.clientY);
+  } else {
+    tooltip.style.display = "none";
+  }
+});
+
+document.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+let syncing = false;
+colA.addEventListener("scroll", () => { if (!syncing) { syncing=true; colB.scrollTop=colA.scrollTop; syncing=false; } });
+colB.addEventListener("scroll", () => { if (!syncing) { syncing=true; colA.scrollTop=colB.scrollTop; syncing=false; } });
+
+scanBtn.onclick = async function() {
+  scanBtn.disabled = true;
+  clearStatus();
+  showLoading("scanning", "window…");
+  try {
+    curMap = await scanAll((ns, count) => {
+      setScan("scanning " + ns + "…  " + count.toLocaleString() + " keys");
+      plLabel.textContent = "scanning";
+      plSub.textContent   = ns + "  (" + count.toLocaleString() + " keys)";
+    });
+    singleCache = null; cmpCache = null;
+    hideLoading();
+    badgeA.textContent = curMap.size.toLocaleString() + " keys";
+    exportBtn.disabled = false;
+    if (impMap) compareBtn.disabled = false;
+    activeCat = ACTIVATORS[0].ns;
+    await render();
+  } catch(e) {
+    hideLoading();
+    setScan("error: " + e.message);
+  }
+  scanBtn.disabled = false;
+};
+
+exportBtn.onclick = function() {
+  const blob = new Blob([JSON.stringify(Object.fromEntries(curMap), null, 2)], { type: "application/json" });
+  const a    = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const ua   = navigator.userAgent.match(/Chrome\/([\d.]+)/);
+  a.download = "env-" + (ua ? "chrome"+ua[1].split(".")[0] : "browser") + "-" + Date.now() + ".json";
+  a.click();
+};
+
+function loadImport(text) {
+  try {
+    impMap = new Map(Object.entries(JSON.parse(text)));
+    cmpCache = null;
+    badgeB.textContent      = impMap.size.toLocaleString() + " keys";
+    importDrop.textContent  = "✓ " + impMap.size.toLocaleString() + " keys";
+    importDrop.classList.add("has-data");
+    if (curMap) compareBtn.disabled = false;
+    if (cmpMode) render();
+  } catch(e) { alert("Bad JSON: " + e.message); }
+}
+
+importDrop.onclick = () => fileInput.click();
+fileInput.onchange = function() {
+  const f = fileInput.files[0]; if (!f) return;
+  const r = new FileReader(); r.onload = e => loadImport(e.target.result); r.readAsText(f);
+};
+importDrop.addEventListener("dragover", e => e.preventDefault());
+importDrop.addEventListener("drop", e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  const r = new FileReader(); r.onload = ev => loadImport(ev.target.result); r.readAsText(f);
+});
+
+compareBtn.onclick = function() {
+  cmpMode = !cmpMode;
+  compareBtn.classList.toggle("active", cmpMode);
+  compareBtn.textContent = cmpMode ? "✕ Exit compare" : "⇌ Compare";
+  if (!cmpMode) {
+    diffFilter = "all";
+    document.querySelectorAll(".dfbtn").forEach(b => b.classList.toggle("active", b.dataset.f === "all"));
+  }
+  render();
+};
+
+document.querySelectorAll(".dfbtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    diffFilter = btn.dataset.f;
+    document.querySelectorAll(".dfbtn").forEach(b => b.classList.toggle("active", b === btn));
+    renderContent();
+  });
+});
+
+searchEl.addEventListener("input", debounce(render, 250));
+nsSearch.addEventListener("input", debounce(buildSidebar, 150));
+document.querySelectorAll(".tf").forEach(c => c.addEventListener("change", render));
+
+function makeResizer(resizerEl, getA, setA, getTotal) {
+  let dragging=false, startX=0, startW=0;
+  resizerEl.addEventListener("mousedown", e => {
+    dragging=true; startX=e.clientX; startW=getA();
+    resizerEl.classList.add("dragging");
+    document.body.style.cursor="col-resize"; document.body.style.userSelect="none";
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const newW = Math.max(80, Math.min(getTotal()-80, startW+(e.clientX-startX)));
+    setA(newW);
+  });
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging=false; resizerEl.classList.remove("dragging");
+    document.body.style.cursor=""; document.body.style.userSelect="";
+  });
+}
+makeResizer(
+  document.getElementById("resizer-sidebar"),
+  () => document.getElementById("sidebar").offsetWidth,
+  w  => { document.getElementById("sidebar").style.width = w+"px"; },
+  () => document.getElementById("body").offsetWidth
+);
+makeResizer(
+  document.getElementById("resizer-panes"),
+  () => document.getElementById("cmp-col-a").offsetWidth,
+  w  => { const el=document.getElementById("cmp-col-a"); el.style.flex="none"; el.style.width=w+"px"; },
+  () => document.getElementById("compare-pane").offsetWidth
+);
+
+
+})();
+</script>
+</body>
+</html>

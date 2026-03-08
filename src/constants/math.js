@@ -1,0 +1,18 @@
+const MATH_PROBES = [
+  ["tan_neg1e300",   () => Math.tan(-1e300)],
+  ["sin_pi",         () => Math.sin(Math.PI)],
+  ["sinh_1",         () => Math.sinh(1)],
+  ["cosh_1",         () => Math.cosh(1)],
+  ["acos_sqrt2_inv", () => Math.acos(Math.SQRT1_2)],
+  ["log2e",          () => Math.LOG2E],
+  ["pow_neg0",       () => Math.pow(-0, 0)],
+  ["atan2_0_neg0",   () => Math.atan2(0, -0)],
+  ["hypot_1_1",      () => Math.hypot(1, 1)],
+  ["cbrt_neg1",      () => Math.cbrt(-1)],
+  ["expm1_1",        () => Math.expm1(1)],
+  ["log1p_1",        () => Math.log1p(1)],
+  ["round_neg0_5",   () => Math.round(-0.5)],
+  ["fround_1_1",     () => Math.fround(1.1)],
+  ["imul_3_4",       () => Math.imul(3, 4)],
+  ["clz32_1",        () => Math.clz32(1)],
+];
