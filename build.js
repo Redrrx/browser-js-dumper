@@ -37,10 +37,7 @@ const bundle = SRC_ORDER.map((f) => {
 
 const script = `<script>\n(function () {\n'use strict';\n\n${bundle}\n\n})();\n</script>`;
 
-let template = fs.readFileSync(
-  path.join(__dirname, "browserjsdumper.html"),
-  "utf8",
-);
+let template = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
 
 if (!template.includes("<!-- BUILD:JS -->")) {
   template = template.replace(
@@ -50,7 +47,7 @@ if (!template.includes("<!-- BUILD:JS -->")) {
 }
 
 const out = template.replace("<!-- BUILD:JS -->", script);
-fs.writeFileSync(path.join(__dirname, "browserjsdumper.html"), out);
+fs.writeFileSync(path.join(__dirname, "index.html"), out);
 console.log(
-  `Built browserjsdumper.html  (${(out.length / 1024).toFixed(1)} KB)  [${SRC_ORDER.length} modules]`,
+  `Built index.html  (${(out.length / 1024).toFixed(1)} KB)  [${SRC_ORDER.length} modules]`,
 );
