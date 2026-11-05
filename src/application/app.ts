@@ -5,7 +5,16 @@ import type { ScanMap, ScanEntry } from '../measurement/scan';
 import { runGPU, runTiming, gpuToEntries, timingToEntries } from '../measurement/gpu';
 import type { AnalysisConfig, GPUResults, SceneImages, TimingResults } from '../measurement/gpu';
 import { loadConfig, saveConfig, validateConfig } from './config';
-import { runVendorDetection, waitForVendorDetection } from './vendor-detection';
+import {
+  runVendorDetection,
+  waitForVendorDetection,
+  vendorDetectionStore,
+} from './vendor-detection';
+import { analyzePixels, MODES } from '../analysis/pixels';
+import type { AnalysisMode } from '../analysis/pixels';
+import { decodePNG, visualPNG } from '../analysis/png';
+import { DEFAULT_MODIFIERS } from '../analysis/similarity';
+import type { ComparisonModifiers } from '../analysis/similarity';
 
 export { validateConfig } from './config';
 
@@ -205,6 +214,8 @@ export const BJSD = {
       env: 'BJSD.env() -> full scan as JSON (download-equivalent)',
       runGPU: 'await BJSD.runGPU() -> GPU analysis JSON',
       runTiming: 'await BJSD.runTiming() -> timing analysis JSON',
+      runVendorDetection: 'await BJSD.runVendorDetection() -> {status,result,preview,error}',
+      compareImages: `await BJSD.compareImages(currentPNG, importedPNG, mode='heatmap', sensitivity=1, modifiers={}) -> {metrics,image}; modes: ${MODES.join(', ')}`,
       runAll: 'await BJSD.runAll() -> runs scan+gpu+timing, returns counts',
       dumpAll: 'await BJSD.dumpAll() -> {env,gpu,timing} one object',
       download: "BJSD.download('env'|'gpu'|'timing'|'all') -> triggers file download",
@@ -256,6 +267,26 @@ export const BJSD = {
   },
   runGPU: () => exclusive(captureGPU),
   runTiming: () => exclusive(captureTiming),
+  runVendorDetection: () =>
+    exclusive(async () => {
+      await runVendorDetection();
+      return vendorDetectionStore.getState();
+    }),
+  async compareImages(
+    currentPNG: string,
+    importedPNG: string,
+    mode: AnalysisMode = 'heatmap',
+    sensitivity = 1,
+    modifiers: Partial<ComparisonModifiers> = {},
+  ) {
+    if (!MODES.includes(mode)) throw new Error('Unsupported analysis mode');
+    const [current, imported] = await Promise.all([decodePNG(currentPNG), decodePNG(importedPNG)]);
+    const result = analyzePixels(current, imported, mode, sensitivity, {
+      ...DEFAULT_MODIFIERS,
+      ...modifiers,
+    });
+    return { metrics: result.metrics, image: visualPNG(result) };
+  },
   runAll: () =>
     exclusive(async () => {
       const scan = await captureScan();

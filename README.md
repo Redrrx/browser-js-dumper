@@ -27,17 +27,19 @@ A specialized tool to dump and diff the entire JavaScript global scope. Built fo
 
 The tool exposes a programmatic API on `window.BJSD` so you can drive the full battery (global-scope scan, CSS probe, GPU + timing analyses) from Puppeteer / Playwright / CDP without scraping the DOM.
 
-| Call                                                      | Returns                                                                                                    |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `await BJSD.scan()`                                       | runs the scan (window + activators + CSS probe) → `{ browser, count }`                                     |
-| `BJSD.query({ category, search, types, page, pageSize })` | paginated results → `{ total, pages, page, entries: [{ path, type, display }] }` (`pageSize` default 1000) |
-| `BJSD.categories()`                                       | `[{ category, count }]`                                                                                    |
-| `BJSD.env()`                                              | full scan as JSON (same shape as the Export file)                                                          |
-| `await BJSD.runGPU()` / `await BJSD.runTiming()`          | analysis battery → JSON                                                                                    |
-| `await BJSD.runAll()`                                     | scan + GPU + timing                                                                                        |
-| `await BJSD.dumpAll()`                                    | everything in one object → `{ env, gpu, timing }`                                                          |
-| `BJSD.download('env' \| 'gpu' \| 'timing' \| 'all')`      | triggers a file download                                                                                   |
-| `BJSD.help()`                                             | self-documented method list                                                                                |
+| Call                                                                              | Returns                                                                                                    |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `await BJSD.scan()`                                                               | runs the scan (window + activators + CSS probe) → `{ browser, count }`                                     |
+| `BJSD.query({ category, search, types, page, pageSize })`                         | paginated results → `{ total, pages, page, entries: [{ path, type, display }] }` (`pageSize` default 1000) |
+| `BJSD.categories()`                                                               | `[{ category, count }]`                                                                                    |
+| `BJSD.env()`                                                                      | full scan as JSON (same shape as the Export file)                                                          |
+| `await BJSD.runGPU()` / `await BJSD.runTiming()`                                  | analysis battery → JSON                                                                                    |
+| `await BJSD.runVendorDetection()`                                                 | PixelTells → `{ status, result, preview, error }`                                                          |
+| `await BJSD.compareImages(currentPNG, importedPNG, mode, sensitivity, modifiers)` | image analysis → `{ metrics, image }` (PNG data URL)                                                       |
+| `await BJSD.runAll()`                                                             | scan + GPU + timing                                                                                        |
+| `await BJSD.dumpAll()`                                                            | everything in one object → `{ env, gpu, timing }`                                                          |
+| `BJSD.download('env' \| 'gpu' \| 'timing' \| 'all')`                              | triggers a file download                                                                                   |
+| `BJSD.help()`                                                                     | self-documented method list                                                                                |
 
 **Auto-run for fully-headless boot** — append `?api=scan` (or `gpu`, `timing`, `all`) to the URL; the page runs that battery on load and resolves `window.__bjsdReady`:
 
@@ -52,6 +54,10 @@ const dump = await page.evaluate(() => BJSD.dumpAll());
 ```
 
 Results paginate over the scan (tens of thousands of entries); analysis results are returned whole. Works from `file://` and over HTTP.
+
+`runVendorDetection()` waits for PixelTells and returns its explicit success, invalid, or failed state. Its result is separate from `dumpAll()`.
+
+`compareImages()` takes two PNG data URLs from the same renderer category with matching dimensions. Modes: `heatmap` (default), `pixelmatch`, `jaccard`, `cosine`, `SSIM`, `frequency`, `edges`, `stats`, `channels`, `subpixel`, `AA`. Sensitivity defaults to `1`; optional modifiers are `pixelThreshold`, `includeAA`, `foregroundThreshold`, `ssimWindow`, and `alpha` (`white`, `black`, or `ignore`).
 
 ---
 
