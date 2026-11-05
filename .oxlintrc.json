@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "jsx-a11y", "unicorn", "oxc"],
+  "categories": { "correctness": "error" },
+  "ignorePatterns": ["dist/**", "node_modules/**", "src/measurement/gpu/previews.ts"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/incompatible-library": "off",
+    "jsx-a11y/prefer-tag-over-role": "warn",
+    "jsx-a11y/no-noninteractive-tabindex": "warn",
+    "jsx-a11y/no-noninteractive-element-interactions": "warn",
+    "jsx-a11y/anchor-is-valid": "warn",
+    "jsx-a11y/control-has-associated-label": "warn",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-explicit-any": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "one-var": ["error", "never"],
+    "no-ternary": "error",
+    "no-nested-ternary": "error",
+    "no-empty": "error",
+    "no-empty-function": "error",
+    "complexity": ["error", 20],
+    "max-depth": ["error", 4],
+    "max-lines-per-function": [
+      "error",
+      { "max": 150, "skipBlankLines": true, "skipComments": true }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+# Exported environment / benchmark dumps (large, machine-specific)
+env-*.json
+
+# Scratch dumps
+foo.json
+wami.json
+
+# Browser layout-test artifacts
+.analysis-before/
+.analysis-after/
+.analysis-test-*/
+.bench-preview-test-*/
+
+# Parallel typed build and test artifacts
+node_modules/
+dist/
+.legacy-site/
+playwright-report/
+test-results/
+coverage/
+AGENTS.md

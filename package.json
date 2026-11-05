@@ -1,0 +1,44 @@
+{
+  "name": "browser-js-dumper",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser JS Dumper a tool for static analysis of browser environments.",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src vite.config.mts",
+    "lint:fix": "oxlint --fix src vite.config.mts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check"
+  },
+  "dependencies": {
+    "@tanstack/react-form": "1.33.5",
+    "@tanstack/react-table": "9.3.1",
+    "@tanstack/react-virtual": "3.14.23",
+    "ml-distance": "5.0.0",
+    "pixelmatch": "8.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-zoom-pan-pinch": "4.2.0",
+    "ssim.js": "3.5.0",
+    "zod": "4.6.7",
+    "zustand": "5.0.16"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "oxlint": "^1.90.0",
+    "prettier": "^3.9.10",
+    "rollup": "4.65.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vite-plugin-singlefile": "2.3.4"
+  }
+}
